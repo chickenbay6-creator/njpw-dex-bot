@@ -1,3 +1,7 @@
+ADMIN_IDS = [
+    1022776420012929094,
+    1059359281104814171,
+]
 import discord
 from flask import Flask
 from discord.ext import commands
@@ -6,12 +10,8 @@ from threading import Thread
 intents = discord.Intents.default()
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-
 app = Flask('')
-ADMIN_IDS = [
-    1022776420012929094,  # Owner
-    1059359281104814171,  # Co-owner
-]
+
 
 
 @app.route('/')
@@ -48,9 +48,13 @@ async def forcespawn(interaction: discord.Interaction):
     await interaction.response.send_message(
         "You do not have permission to use this command.", ephemeral=True
     )
-    return
     await interaction.response.send_message("Spawn forced!", ephemeral=True)
+
 @bot.event
 async def on_ready():
-  await bot.tree.sync()
-  print(f"Logged in as {bot.user}")
+    await bot.tree.sync()
+    print(f"Logged in as {bot.user}")
+
+bot.run("YOUR_DISCORD_BOT_TOKEN")
+ 
+    
