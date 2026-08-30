@@ -1,8 +1,13 @@
 
+import discord
 from flask import Flask
 from threading import Thread
 
 app = Flask('')
+ADMIN_IDS = [
+    1022776420012929094,  # Owner
+    1059359281104814171,  # Co-owner
+]
 
 
 @app.route('/')
@@ -22,3 +27,24 @@ def keep_alive():
 
 # Make sure keep_alive() is called right before your bot runs
 keep_alive()
+
+# Replace lines 30-34 with your actual command:
+@bot.tree.command(name="create_card", description="Creates a card")
+async def create_card(interaction: discord.Interaction):
+  # Notice how the check is indented INSIDE the function
+  if interaction.user.id not in ADMIN_IDS:
+    await interaction.response.send_message(
+        "You do not have permission to use this command.", ephemeral=True
+    )
+    return
+
+@bot.tree.command(name="forcespawn", description="Forces a spawn")
+async def forcespawn(interaction: discord.Interaction):
+  if interaction.user.id not in ADMIN_IDS:
+    await interaction.response.send_message(
+        "You do not have permission to use this command.", ephemeral=True
+    )
+    return
+
+  # Your force spawn code goes here
+  await interaction.response.send_message("Spawn forced!", ephemeral=True)
