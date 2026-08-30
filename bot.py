@@ -49,8 +49,7 @@ async def forcespawn(interaction: discord.Interaction):
         "You do not have permission to use this command.", ephemeral=True
     )
     return
-  # Your force spawn code goes here
-  await interaction.response.send_message("Spawn forced!", ephemeral=True)
+    await interaction.response.send_message("Spawn forced!", ephemeral=True)
 @bot.event
 async def on_ready():
   await bot.tree.sync()
