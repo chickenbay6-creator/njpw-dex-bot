@@ -1,7 +1,11 @@
-
 import discord
 from flask import Flask
+from discord.ext import commands
 from threading import Thread
+
+intents = discord.Intents.default()
+bot = commands.Bot(command_prefix="!", intents=intents)
+
 
 app = Flask('')
 ADMIN_IDS = [
