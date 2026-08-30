@@ -55,6 +55,6 @@ async def on_ready():
     await bot.tree.sync()
     print(f"Logged in as {bot.user}")
 
-bot.run("YOUR_DISCORD_BOT_TOKEN")
+bot.run(MTU0MzUxOTgwOTQzMjU5MjQxNQ.G3SfgV.2L7shfmbyRkaXmshI0J62Dp6SrI3GvVyMNPzW8)
  
     
