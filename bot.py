@@ -55,6 +55,7 @@ async def on_ready():
     await bot.tree.sync()
     print(f"Logged in as {bot.user}")
 
-bot.run(MTU0MzUxOTgwOTQzMjU5MjQxNQ.G3SfgV.2L7shfmbyRkaXmshI0J62Dp6SrI3GvVyMNPzW8)
+bot.run("MTU@MzUxOTgwOTQzMjU1jQXNQ.G3SfGV.2L7shfmbyRkaXmshI0J62Dp6SrI3GvVyMNpZW8")
+
  
     
