@@ -52,13 +52,16 @@ async def forcespawn(interaction: discord.Interaction):
 async def on_ready():
     await bot.tree.sync()
 
-bot.run("MTU0MzUxOTgwOTQzMjU5MjQxNQ.GRwL5s.gt1XtxnCANMsXlvWNNAh0eWJaTsK2cNWanHRt8")
+bot.run("MTU0MzUxOTgwOTQzMjU5MjQxNQ.G8L54G.voOa0fdHz4uXQnmbqTjLPxaKJLILz-dygQ2V-M")
 
+@bot.event
 async def on_ready():
     await bot.tree.sync()
     print(f"Logged in as {bot.user}")
 
-bot.run("MTU0MzUxOTgwOTQzMjU5MjQxNQ.GRwL5s.gt1XtxnCANMsXlvWNNAh0eWJaTsK2cNWanHRt8")
+bot.run("@bot.event
+async def on_ready():
+    await bot.tree.sync()
+    print(f"Logged in as {bot.user}")
 
- 
-    
+bot.run("MTU0MzUxOTgwOTQzMjU5MjQxNQ.G8L54G.voOa0fdHz4uXQnmbqTjLPxaKJLILz-dygQ2V-M")
