@@ -29,14 +29,12 @@ def keep_alive():
   t.start()
 
 
-# Make sure keep_alive() is called right before your bot runs
 keep_alive()
 
-# Replace lines 30-34 with your actual command:
 @bot.tree.command(name="create_card", description="Creates a card")
 async def create_card(interaction: discord.Interaction):
   # Notice how the check is indented INSIDE the function
-  if interaction.user.id not in ADMIN_IDS:
+  if interaction.user.id not in ADMIN_IDS:1022776420012929094 1059359281104814171
     await interaction.response.send_message(
         "You do not have permission to use this command.", ephemeral=True
     )
@@ -44,13 +42,18 @@ async def create_card(interaction: discord.Interaction):
 
 @bot.tree.command(name="forcespawn", description="Forces a spawn")
 async def forcespawn(interaction: discord.Interaction):
-  if interaction.user.id not in ADMIN_IDS:
-    await interaction.response.send_message(
-        "You do not have permission to use this command.", ephemeral=True
-    )
-    await interaction.response.send_message("Spawn forced!", ephemeral=True)
+    await interaction.response.defer(ephemeral=True)
+    if interaction.user.id not in ADMIN_IDS:
+        await interaction.followup.send("You do not have permission to use this command.")
+        return
+    await interaction.followup.send("Spawn forced!")
 
 @bot.event
+async def on_ready():
+    await bot.tree.sync()
+
+bot.run("MTU0MzUxOTgwOTQzMjU5MjQxNQ.GRwL5s.gt1XtxnCANMsXlvWNNAh0eWJaTsK2cNWanHRt8")
+
 async def on_ready():
     await bot.tree.sync()
     print(f"Logged in as {bot.user}")
