@@ -15,8 +15,7 @@ app = Flask('')
 
 @app.route('/')
 def home():
-    chno = "Bot is running!"
-    return chno
+    return "Bot is running!"
 
 def run():
     app.run(host='0.0.0.0', port=8080)
@@ -29,7 +28,7 @@ keep_alive()
 
 @tasks.loop(hours=1)
 async def hourly_spawn():
-    channel_id = 123456789012345678  # Replace with your target channel ID
+    channel_id = 123456789012345678
     channel = bot.get_channel(channel_id)
     if channel:
         await channel.send("A wild dex card has spawned! Use your commands to catch it.")
@@ -47,9 +46,9 @@ async def create_card(interaction: discord.Interaction):
 async def forcespawn(interaction: discord.Interaction):
     await interaction.response.defer(ephemeral=True)
     if interaction.user.id not in ADMIN_IDS:
-        await interaction.followup.send("You do not have permission to use this command.")
+        await interaction.followup.send("You do not have permission to use this command.", ephemeral=True)
         return
-    await interaction.followup.send("Spawn forced!")
+    await interaction.followup.send("Spawn forced!", ephemeral=True)
 
 @bot.event
 async def on_ready():
