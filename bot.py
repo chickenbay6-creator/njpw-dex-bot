@@ -1,12 +1,13 @@
-ADMIN_IDS = [
-    1022776420012929094,
-    1059359281104814171,
-]
-
+import os
 import discord
 from flask import Flask
 from discord.ext import commands, tasks
 from threading import Thread
+
+ADMIN_IDS = [
+    1022776420012929094,
+    1059359281104814171,
+]
 
 intents = discord.Intents.default()
 bot = commands.Bot(command_prefix="!", intents=intents)
@@ -18,7 +19,8 @@ def home():
     return "Bot is running!"
 
 def run():
-    app.run(host='0.0.0.0', port=8080)
+    port = int(os.environ.get('PORT', 8080))
+    app.run(host='0.0.0.0', port=port)
 
 def keep_alive():
     t = Thread(target=run)
@@ -46,9 +48,9 @@ async def create_card(interaction: discord.Interaction):
 async def forcespawn(interaction: discord.Interaction):
     await interaction.response.defer(ephemeral=True)
     if interaction.user.id not in ADMIN_IDS:
-        await interaction.followup.send("You do not have permission to use this command.", ephemeral=True)
+        await interaction.followup.send("You do not have permission to use this command.")
         return
-    await interaction.followup.send("Spawn forced!", ephemeral=True)
+    await interaction.followup.send("Spawn forced!")
 
 @bot.event
 async def on_ready():
