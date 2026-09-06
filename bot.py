@@ -59,4 +59,4 @@ async def on_ready():
     if not hourly_spawn.is_running():
         hourly_spawn.start()
 
-bot.run("MTU0MzUxOTgwOTQzMjU5MjQxNQ.G7VXdu.bTzejuDa9mApxgZu3pZNoSXSEymozvlRbP5qXUu")
+bot.run("MTU0MzUxOTgwOTQzMjU5MjQxNQ.GswLU-.lKiRBDGGDuN08_kNtOvQN-_0MO7McE3erv2qoo")
