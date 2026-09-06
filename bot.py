@@ -48,14 +48,15 @@ async def create_card(interaction: discord.Interaction):
 async def forcespawn(interaction: discord.Interaction):
     await interaction.response.defer(ephemeral=True)
     if interaction.user.id not in ADMIN_IDS:
-        await interaction.followup.send("You do not have permission to use this command.")
+        await interaction.followup.send("You do not have permission to use this command.", ephemeral=True)
         return
-    await interaction.followup.send("Spawn forced!")
+    await interaction.followup.send("Spawn forced!", ephemeral=True)
 
 @bot.event
 async def on_ready():
     await bot.tree.sync()
+    print(f"Logged in as {bot.user}")
     if not hourly_spawn.is_running():
         hourly_spawn.start()
 
-bot.run(os.environ.get("MTU0MzUxOTgwOTQzMjU5MjQxNQ.GbOe1P.ElIq0gy4ZhjHiyM7WjFwQ6_H8X2_ReuhCpg2s0"))
+bot.run("MTU0MzUxOTgwOTQzMjU5MjQxNQ.G7VXdu.bTzejuDa9mApxgZu3pZNoSXSEymozvlRbP5qXUu")
