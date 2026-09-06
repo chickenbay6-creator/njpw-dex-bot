@@ -30,7 +30,7 @@ keep_alive()
 
 @tasks.loop(hours=1)
 async def hourly_spawn():
-    channel_id = 123456789012345678  # Replace with your target channel ID
+    channel_id = 123456789012345678 
     channel = bot.get_channel(channel_id)
     if channel:
         await channel.send("A wild dex card has spawned! Use your commands to catch it.")
@@ -48,15 +48,14 @@ async def create_card(interaction: discord.Interaction):
 async def forcespawn(interaction: discord.Interaction):
     await interaction.response.defer(ephemeral=True)
     if interaction.user.id not in ADMIN_IDS:
-        await interaction.followup.send("You do not have permission to use this command.", ephemeral=True)
+        await interaction.followup.send("You do not have permission to use this command.")
         return
-    await interaction.followup.send("Spawn forced!", ephemeral=True)
+    await interaction.followup.send("Spawn forced!")
 
 @bot.event
 async def on_ready():
     await bot.tree.sync()
-    print(f"Logged in as {bot.user}")
     if not hourly_spawn.is_running():
         hourly_spawn.start()
 
-bot.run("MTU0MzUxOTgwOTQzMjU5MjQxNQ.G-BF0B.sagFTjvKSx4jgtxVyMmMb5xUpjozvEa6mIpea0")
+bot.run(os.environ.get("MTU0MzUxOTgwOTQzMjU5MjQxNQ.GbOe1P.ElIq0gy4ZhjHiyM7WjFwQ6_H8X2_ReuhCpg2s0"))
