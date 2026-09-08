@@ -10,6 +10,9 @@ ADMIN_IDS = [
 ]
 
 intents = discord.Intents.default()
+intents.message_content = True
+intents.members = True
+
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 app = Flask('')
@@ -30,10 +33,12 @@ keep_alive()
 
 @tasks.loop(hours=1)
 async def hourly_spawn():
-    channel_id = 123456789012345678 
-    channel = bot.get_channel(channel_id)
-    if channel:
-        await channel.send("A wild dex card has spawned! Use your commands to catch it.")
+    for guild in bot.guilds:
+        for channel in guild.text_channels:
+            if "spawn" in channel.name or "main" in channel.name or "general" in channel.name:
+                await channel.send("A wild NJPW dex card has spawned! Use your commands to catch it.")
+                break
+        break
 
 @bot.tree.command(name="create_card", description="Creates a card")
 async def create_card(interaction: discord.Interaction):
@@ -42,20 +47,24 @@ async def create_card(interaction: discord.Interaction):
             "You do not have permission to use this command.", ephemeral=True
         )
         return
-    await interaction.response.send_message("Card created!", ephemeral=True)
+    await interaction.response.send_message("Card successfully created!", ephemeral=True)
 
 @bot.tree.command(name="forcespawn", description="Forces a spawn")
 async def forcespawn(interaction: discord.Interaction):
-    await interaction.response.defer(ephemeral=True)
     if interaction.user.id not in ADMIN_IDS:
-        await interaction.followup.send("You do not have permission to use this command.", ephemeral=True)
+        await interaction.response.send_message("You do not have permission to use this command.", ephemeral=True)
         return
-    await interaction.followup.send("Spawn forced!", ephemeral=True)
+    
+    await interaction.response.defer(ephemeral=True)
+    await interaction.channel.send("A wild NJPW dex card has been force-spawned! Catch me!")
+    await interaction.followup.send("Spawn forced successfully!", ephemeral=True)
 
 @bot.event
 async def on_ready():
-    await bot.tree.sync()
-    print(f"Logged in as {bot.user}")
+    for guild in bot.guilds:
+        bot.tree.copy_global_to(guild=guild)
+        await bot.tree.sync(guild=guild)
+    print(f"Logged in as {bot.user} and commands synced instantly!")
     if not hourly_spawn.is_running():
         hourly_spawn.start()
 
