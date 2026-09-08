@@ -71,4 +71,4 @@ async def on_ready():
     if not hourly_spawn.is_running():
         hourly_spawn.start()
 
-bot.run("MTU0MzUxOTgwOTQzMjU5MjQxNQ.GbfgGa.JA8yTDuH_ikqLesCk8iA3MSk4Q0OaDy0C9CoL4")
+bot.run(os.getenv("DISCORD_TOKEN"))
