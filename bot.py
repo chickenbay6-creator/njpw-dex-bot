@@ -3,31 +3,35 @@ import json
 import random
 import sqlite3
 from datetime import datetime, timezone
+from threading import Thread
 
 import discord
 from discord import app_commands
 from discord.ext import commands, tasks
+from flask import Flask
 
 
 # ============================================================
-# NJPW DEX
+# NJPW DEX BOT
 # ============================================================
 
-# YOUR OWNER + CO-OWNER DISCORD IDS
 OWNER_ID = 1022776420012929094
 CO_OWNER_ID = 1059359281104814171
-
-ADMIN_IDS = {
-    OWNER_ID,
-    CO_OWNER_ID
-}
-
-# Optional:
-# Put your spawn channel ID into Replit Secrets as:
-# SPAWN_CHANNEL_ID
-SPAWN_CHANNEL_ID = int(os.getenv("SPAWN_CHANNEL_ID", "0"))
+ADMIN_IDS = {OWNER_ID, CO_OWNER_ID}
 
 TOKEN = os.getenv("DISCORD_TOKEN")
+SPAWN_CHANNEL_ID = int(os.getenv("SPAWN_CHANNEL_ID", "0"))
+
+DATABASE = "njpw_dex.db"
+
+RARITY_BONUS = {
+    "Common": 0,
+    "Uncommon": 2,
+    "Rare": 5,
+    "Super Rare": 8,
+    "Epic": 12,
+    "Legend": 16,
+}
 
 
 # ============================================================
@@ -35,7 +39,7 @@ TOKEN = os.getenv("DISCORD_TOKEN")
 # ============================================================
 
 db = sqlite3.connect(
-    "njpw_dex.db",
+    DATABASE,
     check_same_thread=False
 )
 
@@ -81,30 +85,8 @@ CREATE TABLE IF NOT EXISTS spawns (
 db.commit()
 
 
-# ============================================================
-# RARITIES
-# ============================================================
-
-RARITY_BONUS = {
-    "Common": 0,
-    "Uncommon": 2,
-    "Rare": 5,
-    "Super Rare": 8,
-    "Epic": 12,
-    "Legend": 16
-}
-
-
-# ============================================================
-# HELPERS
-# ============================================================
-
 def now():
     return datetime.now(timezone.utc).isoformat()
-
-
-def is_admin(user_id):
-    return user_id in ADMIN_IDS
 
 
 def normalize(text):
@@ -116,49 +98,34 @@ def normalize(text):
     )
 
 
-def get_card(card_id):
+def is_admin(user_id):
+    return user_id in ADMIN_IDS
 
+
+def get_card(card_id):
     return db.execute(
-        """
-        SELECT *
-        FROM cards
-        WHERE id = ?
-        AND active = 1
-        """,
+        "SELECT * FROM cards WHERE id = ? AND active = 1",
         (card_id,)
     ).fetchone()
 
 
 def get_all_cards():
-
     return db.execute(
-        """
-        SELECT *
-        FROM cards
-        WHERE active = 1
-        ORDER BY id
-        """
+        "SELECT * FROM cards WHERE active = 1 ORDER BY id"
     ).fetchall()
 
 
 def get_aliases(card):
-
     try:
-        aliases = json.loads(
-            card["aliases"]
-        )
-
         return [
-            normalize(alias)
-            for alias in aliases
+            normalize(x)
+            for x in json.loads(card["aliases"])
         ]
-
     except Exception:
         return []
 
 
 def owns_card(user_id, card_id):
-
     result = db.execute(
         """
         SELECT id
@@ -167,39 +134,25 @@ def owns_card(user_id, card_id):
         AND card_id = ?
         LIMIT 1
         """,
-        (
-            user_id,
-            card_id
-        )
+        (user_id, card_id)
     ).fetchone()
 
     return result is not None
 
 
-def give_card(user_id, card_id):
-
+def give_card_to_user(user_id, card_id):
     db.execute(
         """
         INSERT INTO inventory
-        (
-            user_id,
-            card_id,
-            date_claimed
-        )
+        (user_id, card_id, date_claimed)
         VALUES (?, ?, ?)
         """,
-        (
-            user_id,
-            card_id,
-            now()
-        )
+        (user_id, card_id, now())
     )
-
     db.commit()
 
 
-def remove_card(user_id, card_id):
-
+def take_card_from_user(user_id, card_id):
     result = db.execute(
         """
         SELECT id
@@ -208,42 +161,32 @@ def remove_card(user_id, card_id):
         AND card_id = ?
         LIMIT 1
         """,
-        (
-            user_id,
-            card_id
-        )
+        (user_id, card_id)
     ).fetchone()
 
     if not result:
         return False
 
     db.execute(
-        """
-        DELETE FROM inventory
-        WHERE id = ?
-        """,
+        "DELETE FROM inventory WHERE id = ?",
         (result["id"],)
     )
 
     db.commit()
-
     return True
 
 
 def card_power(card):
-
     average = (
         card["fighting_spirit"]
         + card["technique"]
         + card["stamina"]
     ) / 3
 
-    bonus = RARITY_BONUS.get(
+    return average + RARITY_BONUS.get(
         card["rarity"],
         0
     )
-
-    return average + bonus
 
 
 # ============================================================
@@ -262,6 +205,41 @@ bot = commands.Bot(
 
 
 # ============================================================
+# RENDER WEB SERVER
+# ============================================================
+
+app = Flask(__name__)
+
+
+@app.route("/")
+def home():
+    return "NJPW DEX BOT IS ONLINE", 200
+
+
+@app.route("/health")
+def health():
+    return "OK", 200
+
+
+def web_server():
+    port = int(
+        os.getenv("PORT", "10000")
+    )
+
+    app.run(
+        host="0.0.0.0",
+        port=port
+    )
+
+
+def start_web_server():
+    Thread(
+        target=web_server,
+        daemon=True
+    ).start()
+
+
+# ============================================================
 # SPAWN EMBED
 # ============================================================
 
@@ -270,8 +248,8 @@ def spawn_embed(card):
     embed = discord.Embed(
         title="A WILD NJPW CARD HAS SPAWNED!",
         description=(
-            "**A mysterious NJPW wrestler appeared!**\n\n"
-            "Click **Catch** and enter the wrestler's name."
+            "A mysterious NJPW wrestler has appeared!\n\n"
+            "Click **CATCH** and enter the wrestler's name."
         ),
         color=discord.Color.blue()
     )
@@ -289,7 +267,6 @@ def spawn_embed(card):
     )
 
     if card["image_url"]:
-
         embed.set_image(
             url=card["image_url"]
         )
@@ -302,37 +279,16 @@ def spawn_embed(card):
 
 
 # ============================================================
-# CLAIMED BUTTON
+# CLAIM MODAL
 # ============================================================
 
-class ClaimedView(discord.ui.View):
-
-    def __init__(self):
-
-        super().__init__(
-            timeout=None
-        )
-
-        button = discord.ui.Button(
-            label="Claimed",
-            style=discord.ButtonStyle.secondary,
-            disabled=True
-        )
-
-        self.add_item(button)
-
-
-# ============================================================
-# CATCH MODAL
-# ============================================================
-
-class CatchModal(discord.ui.Modal):
+class CatchModal(
+    discord.ui.Modal,
+    title="Who is this wrestler?"
+):
 
     def __init__(self, message_id):
-
-        super().__init__(
-            title="Who is this wrestler?"
-        )
+        super().__init__()
 
         self.message_id = message_id
 
@@ -343,9 +299,7 @@ class CatchModal(discord.ui.Modal):
             max_length=100
         )
 
-        self.add_item(
-            self.answer
-        )
+        self.add_item(self.answer)
 
 
     async def on_submit(self, interaction):
@@ -366,11 +320,10 @@ class CatchModal(discord.ui.Modal):
             (self.message_id,)
         ).fetchone()
 
-
         if not spawn:
 
             await interaction.response.send_message(
-                "❌ This spawn no longer exists.",
+                "This spawn no longer exists.",
                 ephemeral=True
             )
 
@@ -380,7 +333,7 @@ class CatchModal(discord.ui.Modal):
         if spawn["claimed"]:
 
             await interaction.response.send_message(
-                "❌ Someone already caught this card.",
+                "Someone already caught this card.",
                 ephemeral=True
             )
 
@@ -391,11 +344,8 @@ class CatchModal(discord.ui.Modal):
             self.answer.value
         )
 
-
         accepted = {
-            normalize(
-                spawn["name"]
-            )
+            normalize(spawn["name"])
         }
 
         accepted.update(
@@ -406,14 +356,14 @@ class CatchModal(discord.ui.Modal):
         if answer not in accepted:
 
             await interaction.response.send_message(
-                "❌ Incorrect! Try again.",
+                "Incorrect! Try again.",
                 ephemeral=True
             )
 
             return
 
 
-        # Lock the spawn
+        # Atomic claim lock
         db.execute(
             """
             UPDATE spawns
@@ -434,21 +384,19 @@ class CatchModal(discord.ui.Modal):
         if changed != 1:
 
             await interaction.response.send_message(
-                "❌ Someone else caught it first!",
+                "Someone else caught it first!",
                 ephemeral=True
             )
 
             return
 
 
-        # Give card
-        give_card(
+        give_card_to_user(
             interaction.user.id,
             spawn["card_id"]
         )
 
 
-        # Disable button
         try:
 
             message = await interaction.channel.fetch_message(
@@ -458,8 +406,8 @@ class CatchModal(discord.ui.Modal):
             embed = discord.Embed(
                 title="CARD CLAIMED!",
                 description=(
-                    f"🎉 {interaction.user.mention} "
-                    f"caught **{spawn['name']}**!"
+                    f"{interaction.user.mention} caught "
+                    f"**{spawn['name']}**!"
                 ),
                 color=discord.Color.green()
             )
@@ -477,52 +425,55 @@ class CatchModal(discord.ui.Modal):
             )
 
             if spawn["image_url"]:
-
                 embed.set_image(
                     url=spawn["image_url"]
                 )
 
+            view = discord.ui.View()
+
+            view.add_item(
+                discord.ui.Button(
+                    label="CLAIMED",
+                    style=discord.ButtonStyle.secondary,
+                    disabled=True
+                )
+            )
+
             await message.edit(
                 embed=embed,
-                view=ClaimedView()
+                view=view
             )
 
         except Exception as error:
 
             print(
-                "Message edit error:",
-                error
+                f"Could not update spawn message: {error}"
             )
 
 
         await interaction.response.send_message(
-            f"🎉 **Correct!** "
-            f"{interaction.user.mention} caught "
-            f"**{spawn['name']}**!",
-            ephemeral=False
+            f"Correct! {interaction.user.mention} caught "
+            f"**{spawn['name']}**!"
         )
 
 
 # ============================================================
-# CATCH VIEW
+# CATCH BUTTON
 # ============================================================
 
 class CatchView(discord.ui.View):
 
     def __init__(self, message_id):
-
-        super().__init__(
-            timeout=None
-        )
+        super().__init__(timeout=None)
 
         self.message_id = message_id
 
 
     @discord.ui.button(
-        label="Catch",
+        label="CATCH",
         style=discord.ButtonStyle.primary
     )
-    async def catch_button(
+    async def catch(
         self,
         interaction,
         button
@@ -536,27 +487,24 @@ class CatchView(discord.ui.View):
 
 
 # ============================================================
-# SPAWN CARD
+# SPAWN FUNCTION
 # ============================================================
 
 async def spawn_card(channel):
 
     cards = get_all_cards()
 
-
     if not cards:
 
         await channel.send(
-            "⚠️ **There are no NJPW cards yet!**\n"
-            "An admin must use `/create_card` first."
+            "There are no cards yet. "
+            "An admin needs to use `/create_card` first."
         )
 
         return None
 
 
-    card = random.choice(
-        cards
-    )
+    card = random.choice(cards)
 
 
     message = await channel.send(
@@ -613,34 +561,32 @@ def find_spawn_channel():
             channel,
             discord.TextChannel
         ):
-
             return channel
+
+
+    preferred = [
+        "spawn",
+        "dex",
+        "general",
+        "main",
+        "test"
+    ]
 
 
     for guild in bot.guilds:
 
         for channel in guild.text_channels:
 
-            name = channel.name.lower()
-
             if any(
-                word in name
-                for word in [
-                    "spawn",
-                    "dex",
-                    "general",
-                    "main",
-                    "test"
-                ]
+                name in channel.name.lower()
+                for name in preferred
             ):
-
                 return channel
 
 
     for guild in bot.guilds:
 
         if guild.text_channels:
-
             return guild.text_channels[0]
 
 
@@ -660,15 +606,12 @@ async def hourly_spawn():
 
         try:
 
-            await spawn_card(
-                channel
-            )
+            await spawn_card(channel)
 
         except Exception as error:
 
             print(
-                "Hourly spawn error:",
-                error
+                f"Hourly spawn error: {error}"
             )
 
 
@@ -684,7 +627,7 @@ async def before_hourly_spawn():
 
 @bot.tree.command(
     name="create_card",
-    description="Owner/Co-owner: create a new NJPW card"
+    description="Create an NJPW DEX card"
 )
 @app_commands.describe(
     name="Wrestler name",
@@ -697,7 +640,7 @@ async def before_hourly_spawn():
     image_url="Direct image URL"
 )
 async def create_card(
-    interaction: discord.Interaction,
+    interaction,
     name: str,
     aliases: str = "",
     rarity: str = "Common",
@@ -713,7 +656,7 @@ async def create_card(
     ):
 
         await interaction.response.send_message(
-            "❌ Owner/co-owner only.",
+            "Owner/co-owner only.",
             ephemeral=True
         )
 
@@ -726,14 +669,8 @@ async def create_card(
     if rarity not in RARITY_BONUS:
 
         await interaction.response.send_message(
-            "❌ Invalid rarity.\n\n"
-            "Available:\n"
-            "Common\n"
-            "Uncommon\n"
-            "Rare\n"
-            "Super Rare\n"
-            "Epic\n"
-            "Legend",
+            "Invalid rarity. Use Common, Uncommon, Rare, "
+            "Super Rare, Epic, or Legend.",
             ephemeral=True
         )
 
@@ -741,8 +678,8 @@ async def create_card(
 
 
     if any(
-        x < 1 or x > 100
-        for x in [
+        stat < 1 or stat > 100
+        for stat in [
             fighting_spirit,
             technique,
             stamina
@@ -750,14 +687,14 @@ async def create_card(
     ):
 
         await interaction.response.send_message(
-            "❌ Stats must be between 1 and 100.",
+            "Stats must be between 1 and 100.",
             ephemeral=True
         )
 
         return
 
 
-    aliases_list = [
+    alias_list = [
         x.strip()
         for x in aliases.split(",")
         if x.strip()
@@ -782,9 +719,7 @@ async def create_card(
         """,
         (
             name.strip(),
-            json.dumps(
-                aliases_list
-            ),
+            json.dumps(alias_list),
             rarity,
             faction.strip(),
             fighting_spirit,
@@ -799,14 +734,14 @@ async def create_card(
 
 
     await interaction.response.send_message(
-        f"✅ **CARD CREATED**\n\n"
-        f"Card ID: **#{cursor.lastrowid}**\n"
-        f"Name: **{name}**\n"
-        f"Rarity: **{rarity}**\n"
-        f"Faction: **{faction}**\n"
-        f"Fighting Spirit: **{fighting_spirit}**\n"
-        f"Technique: **{technique}**\n"
-        f"Stamina: **{stamina}**",
+        f"Card successfully created!\n\n"
+        f"**ID:** #{cursor.lastrowid}\n"
+        f"**Name:** {name}\n"
+        f"**Rarity:** {rarity}\n"
+        f"**Faction:** {faction}\n"
+        f"**Fighting Spirit:** {fighting_spirit}\n"
+        f"**Technique:** {technique}\n"
+        f"**Stamina:** {stamina}",
         ephemeral=True
     )
 
@@ -817,11 +752,11 @@ async def create_card(
 
 @bot.tree.command(
     name="edit_card",
-    description="Owner/co-owner: edit an NJPW card"
+    description="Edit an NJPW DEX card"
 )
 @app_commands.describe(
     card_id="Card ID",
-    name="New name",
+    name="New wrestler name",
     aliases="New aliases separated by commas",
     rarity="New rarity",
     faction="New faction",
@@ -831,7 +766,7 @@ async def create_card(
     image_url="New image URL"
 )
 async def edit_card(
-    interaction: discord.Interaction,
+    interaction,
     card_id: int,
     name: str = None,
     aliases: str = None,
@@ -848,22 +783,20 @@ async def edit_card(
     ):
 
         await interaction.response.send_message(
-            "❌ Owner/co-owner only.",
+            "Owner/co-owner only.",
             ephemeral=True
         )
 
         return
 
 
-    card = get_card(
-        card_id
-    )
+    card = get_card(card_id)
 
 
     if not card:
 
         await interaction.response.send_message(
-            "❌ Card not found.",
+            "Card not found.",
             ephemeral=True
         )
 
@@ -876,29 +809,20 @@ async def edit_card(
 
     if name is not None:
 
-        updates.append(
-            "name = ?"
-        )
-
-        values.append(
-            name.strip()
-        )
+        updates.append("name = ?")
+        values.append(name.strip())
 
 
     if aliases is not None:
 
-        updates.append(
-            "aliases = ?"
-        )
+        updates.append("aliases = ?")
 
         values.append(
-            json.dumps(
-                [
-                    x.strip()
-                    for x in aliases.split(",")
-                    if x.strip()
-                ]
-            )
+            json.dumps([
+                x.strip()
+                for x in aliases.split(",")
+                if x.strip()
+            ])
         )
 
 
@@ -909,31 +833,20 @@ async def edit_card(
         if rarity not in RARITY_BONUS:
 
             await interaction.response.send_message(
-                "❌ Invalid rarity.",
+                "Invalid rarity.",
                 ephemeral=True
             )
 
             return
 
-
-        updates.append(
-            "rarity = ?"
-        )
-
-        values.append(
-            rarity
-        )
+        updates.append("rarity = ?")
+        values.append(rarity)
 
 
     if faction is not None:
 
-        updates.append(
-            "faction = ?"
-        )
-
-        values.append(
-            faction.strip()
-        )
+        updates.append("faction = ?")
+        values.append(faction.strip())
 
 
     for field, value in [
@@ -947,46 +860,36 @@ async def edit_card(
             if value < 1 or value > 100:
 
                 await interaction.response.send_message(
-                    "❌ Stats must be between 1 and 100.",
+                    "Stats must be between 1 and 100.",
                     ephemeral=True
                 )
 
                 return
 
-
             updates.append(
                 f"{field} = ?"
             )
 
-            values.append(
-                value
-            )
+            values.append(value)
 
 
     if image_url is not None:
 
-        updates.append(
-            "image_url = ?"
-        )
-
-        values.append(
-            image_url.strip()
-        )
+        updates.append("image_url = ?")
+        values.append(image_url.strip())
 
 
     if not updates:
 
         await interaction.response.send_message(
-            "❌ Nothing to edit.",
+            "Nothing to edit.",
             ephemeral=True
         )
 
         return
 
 
-    values.append(
-        card_id
-    )
+    values.append(card_id)
 
 
     db.execute(
@@ -1002,7 +905,7 @@ async def edit_card(
 
 
     await interaction.response.send_message(
-        f"✅ Card **#{card_id}** updated.",
+        f"Card **#{card_id}** updated.",
         ephemeral=True
     )
 
@@ -1013,13 +916,13 @@ async def edit_card(
 
 @bot.tree.command(
     name="delete_card",
-    description="Owner/co-owner: delete a card"
+    description="Remove a card from the spawn pool"
 )
 @app_commands.describe(
     card_id="Card ID"
 )
 async def delete_card(
-    interaction: discord.Interaction,
+    interaction,
     card_id: int
 ):
 
@@ -1028,22 +931,20 @@ async def delete_card(
     ):
 
         await interaction.response.send_message(
-            "❌ Owner/co-owner only.",
+            "Owner/co-owner only.",
             ephemeral=True
         )
 
         return
 
 
-    card = get_card(
-        card_id
-    )
+    card = get_card(card_id)
 
 
     if not card:
 
         await interaction.response.send_message(
-            "❌ Card not found.",
+            "Card not found.",
             ephemeral=True
         )
 
@@ -1063,7 +964,7 @@ async def delete_card(
 
 
     await interaction.response.send_message(
-        f"✅ **{card['name']}** deleted from the spawn pool.",
+        f"**{card['name']}** removed from the spawn pool.",
         ephemeral=True
     )
 
@@ -1074,18 +975,16 @@ async def delete_card(
 
 @bot.tree.command(
     name="force_spawn",
-    description="Owner/co-owner: force a card spawn"
+    description="Force spawn an NJPW card"
 )
-async def force_spawn(
-    interaction: discord.Interaction
-):
+async def force_spawn(interaction):
 
     if not is_admin(
         interaction.user.id
     ):
 
         await interaction.response.send_message(
-            "❌ Owner/co-owner only.",
+            "Owner/co-owner only.",
             ephemeral=True
         )
 
@@ -1098,7 +997,7 @@ async def force_spawn(
     ):
 
         await interaction.response.send_message(
-            "❌ This command must be used in a text channel.",
+            "Use this command in a normal text channel.",
             ephemeral=True
         )
 
@@ -1118,7 +1017,7 @@ async def force_spawn(
     if message:
 
         await interaction.followup.send(
-            "✅ **NJPW card force-spawned!**",
+            "Force spawn successful!",
             ephemeral=True
         )
 
@@ -1129,14 +1028,14 @@ async def force_spawn(
 
 @bot.tree.command(
     name="give_card_admin",
-    description="Owner/co-owner: give a card to anyone"
+    description="Give any card to a player"
 )
 @app_commands.describe(
-    user="User receiving the card",
+    user="Player receiving the card",
     card_id="Card ID"
 )
 async def give_card_admin(
-    interaction: discord.Interaction,
+    interaction,
     user: discord.Member,
     card_id: int
 ):
@@ -1146,36 +1045,34 @@ async def give_card_admin(
     ):
 
         await interaction.response.send_message(
-            "❌ Owner/co-owner only.",
+            "Owner/co-owner only.",
             ephemeral=True
         )
 
         return
 
 
-    card = get_card(
-        card_id
-    )
+    card = get_card(card_id)
 
 
     if not card:
 
         await interaction.response.send_message(
-            "❌ Card not found.",
+            "Card not found.",
             ephemeral=True
         )
 
         return
 
 
-    give_card(
+    give_card_to_user(
         user.id,
         card_id
     )
 
 
     await interaction.response.send_message(
-        f"✅ Gave **{card['name']}** "
+        f"Gave **{card['name']}** "
         f"(#{card_id}) to {user.mention}.",
         ephemeral=True
     )
@@ -1187,18 +1084,16 @@ async def give_card_admin(
 
 @bot.tree.command(
     name="card_list",
-    description="Owner/co-owner: view all cards"
+    description="List all NJPW cards"
 )
-async def card_list(
-    interaction: discord.Interaction
-):
+async def card_list(interaction):
 
     if not is_admin(
         interaction.user.id
     ):
 
         await interaction.response.send_message(
-            "❌ Owner/co-owner only.",
+            "Owner/co-owner only.",
             ephemeral=True
         )
 
@@ -1219,7 +1114,6 @@ async def card_list(
 
 
     lines = []
-
 
     for card in cards:
 
@@ -1249,14 +1143,11 @@ async def card_list(
     user="Optional player"
 )
 async def dex(
-    interaction: discord.Interaction,
+    interaction,
     user: discord.Member = None
 ):
 
-    target = (
-        user
-        or interaction.user
-    )
+    target = user or interaction.user
 
 
     cards = db.execute(
@@ -1286,9 +1177,7 @@ async def dex(
 
     embed.add_field(
         name="Cards Caught",
-        value=str(
-            len(cards)
-        ),
+        value=str(len(cards)),
         inline=True
     )
 
@@ -1302,38 +1191,28 @@ async def dex(
 
     if cards:
 
-        grouped = {}
-
+        groups = {}
 
         for card in cards:
 
-            grouped.setdefault(
+            groups.setdefault(
                 card["rarity"],
                 []
             ).append(
-                card["name"]
-            )
-
-
-        sections = []
-
-
-        for rarity, names in grouped.items():
-
-            sections.append(
-                f"**{rarity}**\n"
-                + ", ".join(names)
+                f"#{card['id']} {card['name']}"
             )
 
 
         embed.description = "\n\n".join(
-            sections
+            f"**{rarity}**\n"
+            + ", ".join(names)
+            for rarity, names in groups.items()
         )[:4000]
 
     else:
 
         embed.description = (
-            "You don't have any NJPW cards yet."
+            "You don't have any cards yet."
         )
 
 
@@ -1347,14 +1226,14 @@ async def dex(
 # ============================================================
 
 @bot.tree.command(
-    name="card",
+    name="card_show",
     description="Show a card you own"
 )
 @app_commands.describe(
     card_id="Card ID"
 )
-async def show_card(
-    interaction: discord.Interaction,
+async def card_show(
+    interaction,
     card_id: int
 ):
 
@@ -1364,22 +1243,20 @@ async def show_card(
     ):
 
         await interaction.response.send_message(
-            "❌ You don't own this card.",
+            "You don't own this card.",
             ephemeral=True
         )
 
         return
 
 
-    card = get_card(
-        card_id
-    )
+    card = get_card(card_id)
 
 
     if not card:
 
         await interaction.response.send_message(
-            "❌ Card not found.",
+            "Card not found.",
             ephemeral=True
         )
 
@@ -1459,8 +1336,8 @@ async def show_card(
     user="Player receiving the card",
     card_id="Card ID"
 )
-async def give_card_command(
-    interaction: discord.Interaction,
+async def give_card(
+    interaction,
     user: discord.Member,
     card_id: int
 ):
@@ -1468,7 +1345,7 @@ async def give_card_command(
     if user.id == interaction.user.id:
 
         await interaction.response.send_message(
-            "❌ You can't give a card to yourself.",
+            "You can't give a card to yourself.",
             ephemeral=True
         )
 
@@ -1481,33 +1358,31 @@ async def give_card_command(
     ):
 
         await interaction.response.send_message(
-            "❌ You don't own this card.",
+            "You don't own this card.",
             ephemeral=True
         )
 
         return
 
 
-    card = get_card(
-        card_id
-    )
+    card = get_card(card_id)
 
 
-    remove_card(
+    take_card_from_user(
         interaction.user.id,
         card_id
     )
 
-
-    give_card(
+    give_card_to_user(
         user.id,
         card_id
     )
 
 
     await interaction.response.send_message(
-        f"✅ {interaction.user.mention} gave "
-        f"**{card['name']}** to {user.mention}."
+        f"{interaction.user.mention} gave "
+        f"**{card['name']}** to "
+        f"{user.mention}."
     )
 
 
@@ -1517,7 +1392,7 @@ async def give_card_command(
 
 @bot.tree.command(
     name="battle",
-    description="Battle another player for their wagered card"
+    description="Battle another player for their card"
 )
 @app_commands.describe(
     opponent="Player you want to battle",
@@ -1525,7 +1400,7 @@ async def give_card_command(
     opponent_card_id="Opponent's wagered card ID"
 )
 async def battle(
-    interaction: discord.Interaction,
+    interaction,
     opponent: discord.Member,
     your_card_id: int,
     opponent_card_id: int
@@ -1534,7 +1409,7 @@ async def battle(
     if opponent.bot:
 
         await interaction.response.send_message(
-            "❌ You can't battle a bot.",
+            "You can't battle a bot.",
             ephemeral=True
         )
 
@@ -1544,7 +1419,7 @@ async def battle(
     if opponent.id == interaction.user.id:
 
         await interaction.response.send_message(
-            "❌ You can't battle yourself.",
+            "You can't battle yourself.",
             ephemeral=True
         )
 
@@ -1557,7 +1432,7 @@ async def battle(
     ):
 
         await interaction.response.send_message(
-            "❌ You don't own your wagered card.",
+            "You don't own your wagered card.",
             ephemeral=True
         )
 
@@ -1570,7 +1445,7 @@ async def battle(
     ):
 
         await interaction.response.send_message(
-            "❌ Your opponent doesn't own that card.",
+            "Your opponent doesn't own that card.",
             ephemeral=True
         )
 
@@ -1611,9 +1486,9 @@ async def battle(
     if score_a == score_b:
 
         await interaction.response.send_message(
-            f"⚔️ **DRAW!**\n\n"
-            f"**{card_a['name']}**: {score_a:.1f}\n"
-            f"**{card_b['name']}**: {score_b:.1f}\n\n"
+            f"**DRAW!**\n\n"
+            f"{card_a['name']}: {score_a:.1f}\n"
+            f"{card_b['name']}: {score_b:.1f}\n\n"
             "No cards changed hands."
         )
 
@@ -1638,30 +1513,27 @@ async def battle(
     )
 
 
-    remove_card(
+    take_card_from_user(
         loser.id,
         losing_card_id
     )
 
-
-    give_card(
+    give_card_to_user(
         winner.id,
         losing_card_id
     )
 
 
     await interaction.response.send_message(
-        f"⚔️ **NJPW DEX BATTLE**\n\n"
-        f"**{interaction.user.display_name}**\n"
-        f"{card_a['name']}\n"
-        f"Power: {card_power(card_a):.1f}\n"
-        f"Roll: {roll_a}\n"
-        f"Total: **{score_a:.1f}**\n\n"
-        f"**{opponent.display_name}**\n"
-        f"{card_b['name']}\n"
-        f"Power: {card_power(card_b):.1f}\n"
-        f"Roll: {roll_b}\n"
-        f"Total: **{score_b:.1f}**\n\n"
+        f"**NJPW DEX BATTLE**\n\n"
+        f"**{interaction.user.display_name}** — "
+        f"{card_a['name']} — "
+        f"{card_power(card_a):.1f} + {roll_a} = "
+        f"**{score_a:.1f}**\n\n"
+        f"**{opponent.display_name}** — "
+        f"{card_b['name']} — "
+        f"{card_power(card_b):.1f} + {roll_b} = "
+        f"**{score_b:.1f}**\n\n"
         f"🏆 **{winner.display_name} WINS!**\n\n"
         f"**{losing_card['name']}** "
         f"has been transferred to {winner.mention}."
@@ -1669,16 +1541,14 @@ async def battle(
 
 
 # ============================================================
-# MANUAL SPAWN
+# MANUAL SPAWN COMMAND
 # ============================================================
 
 @bot.tree.command(
     name="spawn",
     description="Spawn a random NJPW card"
 )
-async def manual_spawn(
-    interaction: discord.Interaction
-):
+async def spawn_command(interaction):
 
     if not isinstance(
         interaction.channel,
@@ -1686,7 +1556,7 @@ async def manual_spawn(
     ):
 
         await interaction.response.send_message(
-            "❌ Text channel only.",
+            "Use this in a text channel.",
             ephemeral=True
         )
 
@@ -1706,13 +1576,13 @@ async def manual_spawn(
     if message:
 
         await interaction.followup.send(
-            "✅ Card spawned!",
+            "Card spawned!",
             ephemeral=True
         )
 
 
 # ============================================================
-# TEXT "SPAWN"
+# TEXT COMMAND
 # ============================================================
 
 @bot.event
@@ -1722,7 +1592,12 @@ async def on_message(message):
         return
 
 
-    if message.content.strip().lower() == "spawn":
+    if (
+        message.content
+        .strip()
+        .lower()
+        == "spawn"
+    ):
 
         if isinstance(
             message.channel,
@@ -1740,15 +1615,13 @@ async def on_message(message):
 
 
 # ============================================================
-# BOT READY
+# READY
 # ============================================================
 
 @bot.event
 async def on_ready():
 
-    print(
-        "=========================================="
-    )
+    print("=" * 50)
 
     print(
         f"BOT ONLINE: {bot.user}"
@@ -1763,16 +1636,14 @@ async def on_ready():
     )
 
     print(
-        f"OWNER: {OWNER_ID}"
+        f"OWNER ID: {OWNER_ID}"
     )
 
     print(
-        f"CO-OWNER: {CO_OWNER_ID}"
+        f"CO-OWNER ID: {CO_OWNER_ID}"
     )
 
-    print(
-        "=========================================="
-    )
+    print("=" * 50)
 
 
     try:
@@ -1786,8 +1657,7 @@ async def on_ready():
     except Exception as error:
 
         print(
-            "COMMAND SYNC ERROR:",
-            error
+            f"COMMAND SYNC ERROR: {error}"
         )
 
 
@@ -1800,24 +1670,18 @@ async def on_ready():
 # START
 # ============================================================
 
-if not TOKEN:
+if __name__ == "__main__":
 
-    print(
-        "=========================================="
-    )
+    start_web_server()
 
-    print(
-        "ERROR: DISCORD_TOKEN IS MISSING"
-    )
 
-    print(
-        "Add DISCORD_TOKEN in Replit Secrets."
-    )
+    if not TOKEN:
 
-    print(
-        "=========================================="
-    )
+        raise RuntimeError(
+            "DISCORD_TOKEN is missing. "
+            "Add your Discord bot token to "
+            "Render Environment Variables."
+        )
 
-else:
 
     bot.run(TOKEN)
